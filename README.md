@@ -31,4 +31,5 @@ A `DATA` listában egy sor egy sorozat, a sorrend a helyezés.
 | `s`  | pontszám (1–10) |
 | `y`  | bemutató éve (ez alapján választja ki a TVmaze-találatot) |
 | `q`  | keresőkifejezések a TVmaze-hez, ha eltérnek a címtől |
+| `season` | melyik évad plakátja legyen, pl. `[6,5]`: a 6. évadé, ha nincs, az 5.-é, ha az sincs, a sorozat posztere |
 | `img`| saját posztert állít be, ilyenkor nincs TVmaze-keresés |

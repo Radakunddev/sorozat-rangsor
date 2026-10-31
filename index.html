@@ -295,7 +295,8 @@ dialog::backdrop{background:rgba(5,6,9,.78);-webkit-backdrop-filter:blur(5px);ba
 
 <script>
 /* A sorozatok szimpátia sorrendben. t = cím, s = pontszám,
-   q = keresőkifejezések a TVmaze-hez (ha eltér a címtől), y = bemutató éve.
+   q = keresőkifejezések a TVmaze-hez (ha eltér a címtől), y = bemutató éve,
+   season = melyik évad plakátja legyen (pl. [6,5]: a 6.-é, ha nincs, az 5.-é).
    Ha egy poszter rossz, adj a sorhoz egy img mezőt saját képlinkkel, pl.
    {"t":"Dark","s":10,"img":"https://.../dark.jpg"} */
 const DATA = [{"t":"Sons of Anarchy","s":9.7,"y":2008},
@@ -320,7 +321,7 @@ const DATA = [{"t":"Sons of Anarchy","s":9.7,"y":2008},
 {"t":"Shingeki no Kyojin","s":9.6,"q":["Attack on Titan","Shingeki no Kyojin"],"y":2013},
 {"t":"Avatar: The Last Airbender","s":9.6,"y":2005},
 {"t":"Billions","s":9.5,"y":2016},
-{"t":"Kingdom","s":10.0,"q":["Kingdom","Kingudamu"],"y":2012},
+{"t":"Kingdom","s":10.0,"q":["Kingdom","Kingudamu"],"y":2012,"season":[6,5]},
 {"t":"Banshee","s":9.5,"y":2013},
 {"t":"The Office (US)","s":9.0,"q":["The Office"],"y":2005},
 {"t":"Westworld","s":8.9,"y":2016},
@@ -501,7 +502,7 @@ function saveCache(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch (e) {} }, 1200);
 }
-const ck = s => s.t + '|' + (s.y || '') + '|' + (s.q || []).join('/');
+const ck = s => s.t + '|' + (s.y || '') + '|' + (s.q || []).join('/') + (s.season ? '|S' + [].concat(s.season).join('/') : '');
 const info = s => { const c = cache[ck(s)]; return c && c.id ? c : null; };
 const settled = s => !!s.img || !!info(s) || (cache[ck(s)] && cache[ck(s)].x && Date.now() - cache[ck(s)].x < MISS_TTL);
 function meta(s){
@@ -638,10 +639,18 @@ async function resolve(s){
     found = exact || null;
   }
   if (found){
+    let m = found.image && found.image.medium, o = found.image && found.image.original, sn = 0;
+    if (s.season){
+      try {
+        const seasons = await getJSON('https://api.tvmaze.com/shows/' + found.id + '/seasons');
+        const hit = [].concat(s.season).map(n => (seasons || []).find(x => x.number === n && x.image)).find(Boolean);
+        if (hit){ m = hit.image.medium; o = hit.image.original; sn = hit.number; }
+      } catch (e) { if (offline) throw e; }
+    }
     cache[ck(s)] = {
       id: found.id, n: found.name, y: yearOf(found),
       net: (found.network && found.network.name) || (found.webChannel && found.webChannel.name) || '',
-      g: found.genres || [], m: found.image && found.image.medium, o: found.image && found.image.original,
+      g: found.genres || [], m: m, o: o, sn: sn,
       u: found.url, s: plain(found.summary)
     };
   } else {
@@ -754,7 +763,7 @@ function fillSheet(s){
   setPoster($('shPoster').querySelector('.poster'), s);
   $('shRank').textContent = s.rank + '. hely';
   $('shTitle').textContent = s.t;
-  const alt = c && c.n && norm(c.n) !== norm(s.t) ? 'A TVmaze-en: ' + c.n : '';
+  const alt = [c && c.n && norm(c.n) !== norm(s.t) ? 'A TVmaze-en: ' + c.n : '', c && c.sn ? 'Plakát: ' + c.sn + '. évad' : ''].filter(Boolean).join(' · ');
   $('shAlt').textContent = alt; $('shAlt').hidden = !alt;
   const facts = [['Pontszám', '<span class="score" data-t="' + tier(s.s) + '" style="font-size:inherit">' + fmt(s.s) + '</span> / 10'], ['Bemutató', esc((c && c.y) || s.y || '–')], ['Csatorna', esc((c && c.net) || '–')]];
   $('shFacts').innerHTML = facts.map(f => '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>').join('');
