@@ -320,7 +320,7 @@ const DATA = [{"t":"Sons of Anarchy","s":9.7,"y":2008},
 {"t":"Shingeki no Kyojin","s":9.6,"q":["Attack on Titan","Shingeki no Kyojin"],"y":2013},
 {"t":"Avatar: The Last Airbender","s":9.6,"y":2005},
 {"t":"Billions","s":9.5,"y":2016},
-{"t":"Kingdom","s":10.0,"y":2019},
+{"t":"Kingdom","s":10.0,"q":["Kingdom","Kingudamu"],"y":2012},
 {"t":"Banshee","s":9.5,"y":2013},
 {"t":"The Office (US)","s":9.0,"q":["The Office"],"y":2005},
 {"t":"Westworld","s":8.9,"y":2016},
@@ -479,7 +479,7 @@ const DATA = [{"t":"Sons of Anarchy","s":9.7,"y":2008},
 const BANDS = [[11,25],[26,50],[51,100],[101,150],[151,175]];
 const GENRE_HU = {Drama:'Dráma',Crime:'Krimi',Thriller:'Thriller',Action:'Akció',Adventure:'Kaland','Science-Fiction':'Sci-fi',Fantasy:'Fantasy',Comedy:'Vígjáték',Horror:'Horror',Mystery:'Rejtély',Anime:'Anime',Supernatural:'Természetfeletti',Romance:'Romantikus',History:'Történelmi',War:'Háborús',Western:'Western',Family:'Családi',Music:'Zenés',Medical:'Orvosi',Legal:'Jogi',Espionage:'Kém',Sports:'Sport',Children:'Gyerek',Food:'Gasztro',Travel:'Utazás',Nature:'Természet',Adult:'Felnőtt'};
 const API = 'https://api.tvmaze.com/search/shows?q=';
-const CACHE_KEY = 'sorozat-rangsor:tvmaze:v1';
+const CACHE_KEY = 'sorozat-rangsor:tvmaze:v2';
 const PREF_KEY = 'sorozat-rangsor:nezet';
 const GAP = 520;            // TVmaze: max. 20 hívás / 10 mp
 const MISS_TTL = 3*864e5;   // nem talált címeket 3 nap múlva újrapróbálja
@@ -495,14 +495,15 @@ function hue(t){ let h = 0; for (const c of t) h = (h*31 + c.codePointAt(0)) >>>
 
 /* ---------- gyorsítótár ---------- */
 let cache = {};
-try { cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}') || {}; } catch (e) { cache = {}; }
+try { cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}') || {}; localStorage.removeItem('sorozat-rangsor:tvmaze:v1'); } catch (e) { cache = {}; }
 let saveTimer = 0;
 function saveCache(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch (e) {} }, 1200);
 }
-const info = s => { const c = cache[s.t]; return c && c.id ? c : null; };
-const settled = s => !!s.img || !!info(s) || (cache[s.t] && cache[s.t].x && Date.now() - cache[s.t].x < MISS_TTL);
+const ck = s => s.t + '|' + (s.y || '') + '|' + (s.q || []).join('/');
+const info = s => { const c = cache[ck(s)]; return c && c.id ? c : null; };
+const settled = s => !!s.img || !!info(s) || (cache[ck(s)] && cache[ck(s)].x && Date.now() - cache[ck(s)].x < MISS_TTL);
 function meta(s){
   const c = info(s);
   return [(c && c.y) || s.y, c && c.net].filter(Boolean).join(' · ');
@@ -608,10 +609,11 @@ function pick(results, s){
   const related = sh => { const n = norm(sh.name || ''); return names.some(x => n === x || n.includes(x) || x.includes(n)); };
   const list = (results || []).map(r => r.show).filter(sh => sh && sh.id && related(sh));
   if (!list.length) return null;
+  const exact = sh => names.includes(norm(sh.name || ''));
+  const best = arr => arr.find(exact) || arr[0] || null;
   if (s.y){
-    return list.find(sh => yearOf(sh) === s.y)
-        || list.find(sh => yearOf(sh) && Math.abs(yearOf(sh) - s.y) === 1)
-        || null;
+    return best(list.filter(sh => yearOf(sh) === s.y))
+        || best(list.filter(sh => yearOf(sh) && Math.abs(yearOf(sh) - s.y) === 1));
   }
   return list.find(sh => sh.image) || list[0];
 }
@@ -636,14 +638,14 @@ async function resolve(s){
     found = exact || null;
   }
   if (found){
-    cache[s.t] = {
+    cache[ck(s)] = {
       id: found.id, n: found.name, y: yearOf(found),
       net: (found.network && found.network.name) || (found.webChannel && found.webChannel.name) || '',
       g: found.genres || [], m: found.image && found.image.medium, o: found.image && found.image.original,
       u: found.url, s: plain(found.summary)
     };
   } else {
-    cache[s.t] = { x: Date.now() };
+    cache[ck(s)] = { x: Date.now() };
   }
   saveCache();
 }
@@ -762,7 +764,7 @@ function fillSheet(s){
   if (c && c.s) sum = '<small>Leírás (TVmaze, angolul)</small>' + esc(c.s);
   else if (c) sum = '';
   else if (offline) sum = 'A TVmaze most nem érhető el, ezért nincs leírás.';
-  else if (cache[s.t] && cache[s.t].x) sum = 'Ehhez a sorozathoz nem találtam adatlapot a TVmaze-en.';
+  else if (cache[ck(s)] && cache[ck(s)].x) sum = 'Ehhez a sorozathoz nem találtam adatlapot a TVmaze-en.';
   else sum = 'Adatok betöltése…';
   $('shSummary').innerHTML = sum;
   const link = $('shLink');
