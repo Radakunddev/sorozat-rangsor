@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sorozat Rangsor</title>
+<meta name="description" content="Az eddig látott sorozataim szimpátia sorrendben, poszterekkel és pontszámokkal.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://api.tvmaze.com" crossorigin>
+<link rel="preconnect" href="https://static.tvmaze.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Sofia+Sans+Extra+Condensed:wght@700;800;900&display=swap">
+<style>
+/* Layout: egy színpad. Fent valódi dobogó (1–3), alatta számsínes top 10 (4–10), majd a teljes poszterfal rangsávokra bontva. */
+:root{
+  --ink:#0b0d12;        /* háttér, kékes fekete */
+  --ink-2:#12151d;      /* felület */
+  --ink-3:#1b1f2a;      /* kiemelt felület */
+  --rule:#252a36;
+  --rule-2:#394050;
+  --paper:#eceef3;      /* szöveg */
+  --muted:#8b92a3;
+  --gold:#f0b541;       /* kiemelés, 1. hely */
+  --silver:#c7cdd8;
+  --bronze:#cf8a55;
+  --glass:rgba(11,13,18,.84);
+  --s-a:var(--gold);    /* 9.5+ */
+  --s-b:#e7e2d3;        /* 9–9.4 */
+  --s-c:#b4bac8;        /* 8–8.9 */
+  --s-d:#868d9f;        /* 7–7.9 */
+  --s-e:#c9705f;        /* 7 alatt */
+  --display:"Sofia Sans Extra Condensed","Arial Narrow","Roboto Condensed","Helvetica Neue",Impact,sans-serif;
+  --body:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--ink);-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ink);color:var(--paper);font:400 15px/1.55 var(--body);-webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom,0px)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--ink)}
+img{max-width:100%}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;text-align:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.wrap{max-width:1240px;margin-inline:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.eyebrow{margin:0;font:600 .72rem/1.2 var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.title{display:block;font:800 1.05rem/1.05 var(--display);text-transform:uppercase;letter-spacing:.01em;text-wrap:balance;overflow-wrap:anywhere}
+.meta{display:block;margin-top:3px;font-size:.78rem;line-height:1.3;color:var(--muted);min-height:1.3em}
+.score{font:800 1.3rem/1 var(--display);font-variant-numeric:tabular-nums;color:var(--sc,var(--paper));letter-spacing:.01em}
+[data-t="a"]{--sc:var(--s-a)}[data-t="b"]{--sc:var(--s-b)}[data-t="c"]{--sc:var(--s-c)}[data-t="d"]{--sc:var(--s-d)}[data-t="e"]{--sc:var(--s-e)}
+
+/* ---------- poszter ---------- */
+.poster{position:relative;display:block;aspect-ratio:2/3;max-width:100%;border-radius:8px;overflow:hidden;background:var(--ink-3);container-type:inline-size;transition:transform .25s ease,box-shadow .25s ease}
+.cover{position:absolute;inset:0;display:flex;align-items:flex-end;padding:11% 10%;background:linear-gradient(165deg,hsl(var(--hue) 28% 27%),hsl(calc(var(--hue) + 40) 32% 9%))}
+.cover::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 3px)}
+.cover span{position:relative;font:800 clamp(13px,15cqi,52px)/.92 var(--display);text-transform:uppercase;color:rgba(236,238,243,.9);text-wrap:balance;overflow-wrap:anywhere}
+.poster img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s ease}
+.poster img.ok{opacity:1}
+.chip{position:absolute;left:7px;top:7px;z-index:2;min-width:1.9em;text-align:center;padding:5px 6px 3px;border-radius:6px;background:rgba(11,13,18,.8);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);font:800 1.05rem/1 var(--display);font-variant-numeric:tabular-nums;color:var(--paper)}
+
+/* ---------- fejléc + dobogó ---------- */
+.hero{position:relative;overflow:hidden;padding-block:clamp(26px,5vw,56px) 0;border-bottom:1px solid var(--rule);isolation:isolate}
+.hero-bg{position:absolute;inset:-60px;z-index:-2;background-size:cover;background-position:center 25%;filter:blur(50px) saturate(1.25);opacity:0;transition:opacity 1.2s ease}
+.hero-bg.ok{opacity:.34}
+.hero::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(48% 62% at 50% 38%,rgba(240,181,65,.13),transparent 70%),linear-gradient(180deg,rgba(11,13,18,.35),rgba(11,13,18,.7) 55%,var(--ink) 100%)}
+.hero-head{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:20px 56px;align-items:end;margin-top:18px}
+h1{margin:0;font:900 clamp(3.7rem,11.5vw,8.8rem)/.8 var(--display);text-transform:uppercase;letter-spacing:-.005em}
+h1 em{font-style:normal;color:var(--gold)}
+.lead{margin:0 0 18px;max-width:46ch;font-size:1.02rem;color:var(--paper)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:18px 26px;margin:0}
+.stats div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.stats dt{order:2;font-size:.76rem;line-height:1.3;color:var(--muted);max-width:22ch}
+.stats dd{order:1;margin:0;font:800 2.3rem/.9 var(--display);font-variant-numeric:tabular-nums}
+.stats dd.gold{color:var(--gold)}
+
+.podium{display:grid;grid-template-columns:1fr 1.2fr 1fr;grid-template-rows:auto auto;column-gap:clamp(8px,2.6vw,30px);max-width:820px;margin:clamp(30px,5vw,54px) auto 0}
+.pod{grid-row:1/3;display:grid;grid-template-rows:subgrid;row-gap:0;min-width:0;text-align:center}
+.pod-1{grid-column:2;--medal:var(--gold)}
+.pod-2{grid-column:1;--medal:var(--silver)}
+.pod-3{grid-column:3;--medal:var(--bronze)}
+.stand{align-self:end;display:flex;flex-direction:column;min-width:0}
+.stand .poster{width:84%;margin-inline:auto;border-radius:9px 9px 2px 2px;box-shadow:0 22px 50px -24px rgba(0,0,0,.9)}
+.pod-1 .stand .poster{box-shadow:0 26px 70px -22px rgba(240,181,65,.42),0 0 0 1px rgba(240,181,65,.35)}
+.pod:hover .stand .poster{transform:translateY(-4px)}
+.plinth{position:relative;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,var(--ink-3),var(--ink-2) 80%);border-top:3px solid var(--medal);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.pod-1 .plinth{height:clamp(84px,12vw,138px)}
+.pod-2 .plinth{height:clamp(58px,8.4vw,98px)}
+.pod-3 .plinth{height:clamp(40px,5.8vw,68px)}
+.pod-num{font:900 clamp(2.2rem,6.4vw,5rem)/.8 var(--display);color:var(--medal);padding-top:.08em}
+.pod-3 .pod-num{font-size:clamp(1.7rem,4.6vw,3.4rem)}
+.cap{align-self:start;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 4px 30px;border-top:1px solid var(--rule-2);min-width:0}
+.cap .title{font-size:clamp(1rem,2.3vw,1.6rem)}
+.cap .meta{margin-top:0}
+.cap .score{font-size:clamp(1.3rem,2.6vw,1.8rem)}
+
+/* ---------- 4–10 sín ---------- */
+.section{padding-block:clamp(34px,6vw,60px) 0}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 18px;margin-bottom:22px}
+h2{margin:0;font:800 clamp(1.9rem,4.2vw,2.8rem)/1 var(--display);text-transform:uppercase}
+.sec-head p{margin:0;color:var(--muted);font-size:.88rem}
+.rail{list-style:none;margin:0;padding:0 0 10px;display:grid;grid-auto-flow:column;grid-auto-columns:205px;gap:18px;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:var(--rule-2) transparent}
+.rail li{scroll-snap-align:start;min-width:0}
+.rail-item{position:relative;display:block;width:100%;padding-left:40%}
+.big-num{position:absolute;left:-2px;bottom:58px;z-index:0;font:900 clamp(7rem,11vw,9.6rem)/.74 var(--display);letter-spacing:-.06em;color:var(--ink);-webkit-text-stroke:2px var(--rule-2);transition:-webkit-text-stroke-color .25s}
+.rail-item:hover .big-num{-webkit-text-stroke-color:var(--gold)}
+.rail-item .poster{z-index:1;box-shadow:-10px 0 24px -10px rgba(0,0,0,.85)}
+.rail-item:hover .poster{transform:translateY(-3px)}
+.rail-cap{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-top:10px;min-height:48px}
+.rail-cap > span:first-child{min-width:0}
+.rail-tile{display:flex;flex-direction:column;justify-content:flex-end;gap:8px;height:100%;min-height:200px;padding:18px;border:1px solid var(--rule);border-radius:10px;background:linear-gradient(180deg,transparent,var(--ink-2))}
+.rail-tile b{font:900 clamp(3.6rem,6vw,5rem)/.8 var(--display);color:var(--gold);font-variant-numeric:tabular-nums}
+.rail-tile span{font-size:.82rem;line-height:1.4;color:var(--muted)}
+.rail-tile strong{font-weight:600;color:var(--paper)}
+@media (min-width:1000px){
+  .rail{grid-auto-flow:row;grid-template-columns:repeat(4,minmax(0,1fr));gap:36px 26px;overflow:visible;padding-bottom:0}
+  .rail-item{padding-left:36%}
+  .big-num{font-size:clamp(9rem,15vw,15rem);left:-6px}
+  .rail-tile{margin-left:36%;height:auto;aspect-ratio:2/3;max-height:100%}
+}
+
+/* ---------- teljes lista ---------- */
+.toolbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;margin-top:clamp(34px,6vw,60px);background:var(--glass);-webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);border-block:1px solid var(--rule)}
+.toolbar-inner{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding-block:10px}
+.search{position:relative;flex:1 1 240px;min-width:0;max-width:420px}
+.search svg{position:absolute;left:13px;top:50%;translate:0 -50%;width:16px;height:16px;color:var(--muted);pointer-events:none}
+.search input{width:100%;height:40px;padding:0 14px 0 38px;border-radius:999px;border:1px solid var(--rule-2);background:var(--ink-2);color:var(--paper);font:inherit;font-size:.92rem}
+.search input::placeholder{color:var(--muted)}
+.search input:focus{outline:2px solid var(--gold);outline-offset:1px}
+.seg{display:inline-flex;padding:3px;border:1px solid var(--rule-2);border-radius:999px;background:var(--ink-2)}
+.seg button{height:32px;padding:0 14px;border-radius:999px;font-size:.84rem;font-weight:600;color:var(--muted);transition:background .2s,color .2s}
+.seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink)}
+.count{margin-left:auto;font-size:.84rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.list-head{padding-block:28px 0}
+.band-block{padding-top:34px}
+.band-head{display:flex;align-items:baseline;gap:14px;margin-bottom:18px}
+.band-head h3{margin:0;font:800 1.7rem/1 var(--display);text-transform:uppercase;white-space:nowrap}
+.band-head .avg{font-size:.82rem;color:var(--muted);white-space:nowrap}
+.band-head::after{content:"";flex:1;height:1px;background:var(--rule);align-self:center}
+
+.grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:26px 18px}
+.grid li{min-width:0}
+.card{display:grid;width:100%;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"poster poster" "body score";gap:9px 10px;border-radius:10px}
+.card .poster{grid-area:poster}
+.card-body{grid-area:body;min-width:0}
+.score-wrap{grid-area:score;display:flex;align-items:center;gap:10px;padding-top:1px}
+.row-rank,.bar{display:none}
+.card:hover .poster{transform:translateY(-3px);box-shadow:0 16px 30px -14px rgba(0,0,0,.9),0 0 0 1px var(--rule-2)}
+.card:focus-visible{outline-offset:5px}
+
+.is-list .grid{grid-template-columns:1fr;gap:0}
+.is-list .card{grid-template-columns:3.2rem 46px minmax(0,1fr) auto;grid-template-areas:"rank poster body score";align-items:center;gap:14px;padding:9px 6px;border-bottom:1px solid var(--rule);border-radius:0}
+.is-list .card:hover{background:var(--ink-2)}
+.is-list .card:hover .poster{transform:none;box-shadow:none}
+.is-list .poster{border-radius:5px}
+.is-list .cover span{font-size:0}
+.is-list .chip{display:none}
+.is-list .row-rank{display:block;grid-area:rank;font:800 1.9rem/1 var(--display);font-variant-numeric:tabular-nums;color:var(--muted);text-align:right}
+.is-list .title{font-size:1.25rem}
+.is-list .bar{display:block;width:clamp(48px,12vw,140px);height:4px;border-radius:4px;background:var(--rule)}
+.is-list .bar i{display:block;height:100%;border-radius:inherit;background:var(--sc)}
+
+
+.empty{padding:48px 0;color:var(--muted);text-align:center}
+
+footer{margin-top:72px;border-top:1px solid var(--rule)}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;padding-block:22px 34px;font-size:.8rem;color:var(--muted)}
+footer a{color:var(--paper)}
+
+/* ---------- adatlap ---------- */
+dialog{padding:0;border:0;background:transparent;color:var(--paper);width:min(880px,calc(100vw - 24px));max-width:none;max-height:calc(100dvh - 24px);overflow:visible}
+dialog::backdrop{background:rgba(5,6,9,.78);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px)}
+.sheet{position:relative;display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:28px;max-height:calc(100dvh - 24px);overflow:auto;padding:26px;border:1px solid var(--rule-2);border-radius:14px;background:var(--ink-2);box-shadow:0 40px 120px -30px rgba(0,0,0,.9)}
+.sh-close{position:absolute;right:12px;top:12px;width:38px;height:38px;border-radius:999px;display:grid;place-items:center;background:var(--ink-3);color:var(--paper);font-size:18px;line-height:1;z-index:3}
+.sh-close:hover{background:var(--rule-2)}
+.sh-body{display:flex;flex-direction:column;gap:12px;min-width:0;padding-right:30px}
+.sh-body h2{font-size:clamp(2rem,5vw,3.2rem);line-height:.92;text-wrap:balance}
+.sh-alt{margin:-4px 0 0;color:var(--muted);font-size:.85rem}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin:6px 0 0;padding:14px 0;border-block:1px solid var(--rule)}
+.facts div{min-width:0}
+.facts dt{font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.facts dd{margin:4px 0 0;font:800 1.35rem/1.05 var(--display);overflow-wrap:anywhere}
+.genres{display:flex;flex-wrap:wrap;gap:6px;margin:0}
+.genres span{padding:4px 10px;border:1px solid var(--rule-2);border-radius:999px;font-size:.78rem;color:var(--paper)}
+.summary{margin:0;max-width:62ch;color:#c9cdd8;font-size:.92rem}
+.summary small{display:block;margin-bottom:4px;font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.sh-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-top:auto;padding-top:8px}
+.sh-actions a{color:var(--gold);font-weight:600;text-decoration:none}
+.sh-actions a:hover{text-decoration:underline}
+.sh-nav{display:flex;gap:8px}
+.sh-nav button{height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--rule-2);font-size:.84rem;font-weight:600}
+.sh-nav button:hover:not(:disabled){background:var(--ink-3)}
+.sh-nav button:disabled{opacity:.35;cursor:default}
+
+@media (max-width:760px){
+  .hero-head{grid-template-columns:1fr;margin-top:12px}
+  .stats dd{font-size:2rem}
+  .cap{padding-bottom:22px}
+  .sheet{grid-template-columns:1fr;gap:18px;padding:18px}
+  .sh-poster{max-width:170px}
+  .sh-body{padding-right:0}
+  .count{margin-left:0;flex-basis:100%}
+}
+@media (max-width:480px){
+  .pod .meta{display:none}
+  .rail{grid-auto-columns:190px}
+  .is-list .card{grid-template-columns:2.3rem 40px minmax(0,1fr) auto;gap:10px}
+  .is-list .row-rank{font-size:1.5rem}
+  .is-list .bar{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-bg" id="heroBg"></div>
+  <div class="wrap">
+    <p class="eyebrow">Személyes lista</p>
+    <div class="hero-head">
+      <h1>Sorozat <em>rangsor</em></h1>
+      <div>
+        <p class="lead" id="lead">Az eddig látott sorozataim szimpátia sorrendben. A helyezés azt mutatja, mennyire szerettem, a pontszám mellette áll.</p>
+        <dl class="stats" id="stats"></dl>
+      </div>
+    </div>
+    <div class="podium" id="podium" aria-label="Dobogó"></div>
+  </div>
+</header>
+
+<main>
+  <section class="section wrap" aria-labelledby="top10-h">
+    <div class="sec-head">
+      <h2 id="top10-h">4–10. hely</h2>
+      <p>A top 10 többi része</p>
+    </div>
+    <ol class="rail" id="rail"></ol>
+  </section>
+
+  <div class="toolbar">
+    <div class="wrap toolbar-inner">
+      <label class="search" for="q">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Keresés címre…" autocomplete="off" spellcheck="false" aria-label="Keresés címre">
+      </label>
+      <div class="seg" role="group" aria-label="Rendezés">
+        <button type="button" id="sortRank" aria-pressed="true">Helyezés</button>
+        <button type="button" id="sortScore" aria-pressed="false">Pontszám</button>
+      </div>
+      <div class="seg" role="group" aria-label="Nézet">
+        <button type="button" id="viewGrid" aria-pressed="true">Rács</button>
+        <button type="button" id="viewList" aria-pressed="false">Lista</button>
+      </div>
+      <span class="count" id="count" aria-live="polite"></span>
+    </div>
+  </div>
+
+  <section class="wrap" aria-labelledby="list-h">
+    <div class="sec-head list-head">
+      <h2 id="list-h">Teljes lista</h2>
+      <p id="listSub"></p>
+    </div>
+    <div id="list"></div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Sorrend és pontszámok: saját. Poszterek és adatok: <a href="https://www.tvmaze.com" target="_blank" rel="noopener">TVmaze</a> (CC BY-SA).</span>
+    <span id="status" aria-live="polite"></span>
+  </div>
+</footer>
+
+<dialog id="sheet" aria-labelledby="shTitle">
+  <div class="sheet">
+    <button type="button" class="sh-close" id="shClose" aria-label="Bezárás">✕</button>
+    <div class="sh-poster" id="shPoster"></div>
+    <div class="sh-body">
+      <p class="eyebrow" id="shRank"></p>
+      <h2 id="shTitle"></h2>
+      <p class="sh-alt" id="shAlt" hidden></p>
+      <dl class="facts" id="shFacts"></dl>
+      <p class="genres" id="shGenres" hidden></p>
+      <p class="summary" id="shSummary"></p>
+      <div class="sh-actions">
+        <a id="shLink" href="https://www.tvmaze.com" target="_blank" rel="noopener">Adatlap a TVmaze-en ↗</a>
+        <span class="sh-nav">
+          <button type="button" id="shPrev">← Előző</button>
+          <button type="button" id="shNext">Következő →</button>
+        </span>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+/* A sorozatok szimpátia sorrendben. t = cím, s = pontszám,
+   q = keresőkifejezések a TVmaze-hez (ha eltér a címtől), y = bemutató éve.
+   Ha egy poszter rossz, adj a sorhoz egy img mezőt saját képlinkkel, pl.
+   {"t":"Dark","s":10,"img":"https://.../dark.jpg"} */
+const DATA = [{"t":"Sons of Anarchy","s":9.7,"y":2008},
+{"t":"Dark","s":10.0,"y":2017},
+{"t":"Vikings","s":9.3,"y":2013},
+{"t":"Suits","s":9.5,"y":2011},
+{"t":"Vinland Saga","s":9.8,"y":2019},
+{"t":"Peaky Blinders","s":9.5,"y":2013},
+{"t":"House M.D.","s":10.0,"q":["House","House M.D."],"y":2004},
+{"t":"Sherlock","s":9.5,"y":2010},
+{"t":"BoJack Horseman","s":9.4,"y":2014},
+{"t":"The Expanse","s":9.8,"y":2015},
+{"t":"Lost","s":9.2,"y":2004},
+{"t":"Game of Thrones","s":9.4,"y":2011},
+{"t":"Breaking Bad","s":9.7,"y":2008},
+{"t":"Aranyélet","s":9.4,"q":["Aranyélet","Aranyelet","Golden Life"],"y":2015},
+{"t":"Dexter","s":9.3,"y":2006},
+{"t":"Better Call Saul","s":10.0,"y":2015},
+{"t":"Succession","s":10.0,"y":2018},
+{"t":"Yellowstone","s":9.0,"y":2018},
+{"t":"Daredevil","s":9.4,"q":["Daredevil","Marvel's Daredevil"],"y":2015},
+{"t":"Shingeki no Kyojin","s":9.6,"q":["Attack on Titan","Shingeki no Kyojin"],"y":2013},
+{"t":"Avatar: The Last Airbender","s":9.6,"y":2005},
+{"t":"Billions","s":9.5,"y":2016},
+{"t":"Kingdom","s":10.0,"y":2019},
+{"t":"Banshee","s":9.5,"y":2013},
+{"t":"The Office (US)","s":9.0,"q":["The Office"],"y":2005},
+{"t":"Westworld","s":8.9,"y":2016},
+{"t":"The Punisher","s":8.9,"q":["The Punisher","Marvel's The Punisher"],"y":2017},
+{"t":"The Walking Dead","s":8.8,"y":2010},
+{"t":"Deadwood","s":9.4,"y":2004},
+{"t":"Steins;Gate / Steins;Gate 0","s":9.7,"q":["Steins;Gate","Steins Gate"],"y":2011},
+{"t":"Preacher","s":8.8,"y":2016},
+{"t":"Warrior","s":8.9,"y":2019},
+{"t":"Monster","s":9.9,"y":2004},
+{"t":"Animal Kingdom","s":8.7,"y":2016},
+{"t":"Person of Interest","s":9.7,"y":2011},
+{"t":"La Casa de Papel","s":8.0,"q":["La Casa de Papel","Money Heist"],"y":2017},
+{"t":"The Boys","s":8.5,"y":2019},
+{"t":"Silicon Valley","s":8.5,"y":2014},
+{"t":"Rick and Morty","s":8.6,"y":2013},
+{"t":"Ted Lasso","s":9.4,"y":2020},
+{"t":"From","s":9.1,"y":2022},
+{"t":"The Blacklist","s":8.9,"y":2013},
+{"t":"Severance","s":9.5,"y":2022},
+{"t":"The 100","s":7.9,"y":2014},
+{"t":"13 Reasons Why","s":7.6,"y":2017},
+{"t":"Prison Break","s":8.5,"y":2005},
+{"t":"Invincible","s":9.0,"y":2021},
+{"t":"The Legend of Korra","s":9.1,"y":2012},
+{"t":"The Leftovers","s":9.5,"y":2014},
+{"t":"Demon Slayer","s":9.3,"q":["Demon Slayer: Kimetsu no Yaiba","Demon Slayer","Kimetsu no Yaiba"],"y":2019},
+{"t":"Outer Range","s":9.0,"y":2022},
+{"t":"12 Monkeys","s":8.9,"y":2015},
+{"t":"Blue Eye Samurai","s":8.8,"y":2023},
+{"t":"Mayor of Kingstown","s":8.9,"y":2021},
+{"t":"Lucifer","s":7.7,"y":2016},
+{"t":"Stranger Things","s":7.9,"y":2016},
+{"t":"Ray Donovan","s":8.7,"y":2013},
+{"t":"1899","s":8.9,"y":2022},
+{"t":"Ozark","s":8.6,"y":2017},
+{"t":"Jujutsu Kaisen","s":9.3,"y":2020},
+{"t":"Mr. Inbetween","s":8.9,"y":2018},
+{"t":"Gotham","s":8.6,"y":2014},
+{"t":"House of the Dragon","s":8.4,"y":2022},
+{"t":"Made in Abyss","s":8.9,"y":2017},
+{"t":"Marco Polo","s":8.9,"y":2014},
+{"t":"Widow's Bay","s":9.1,"y":2026},
+{"t":"Pluribus","s":9.3,"y":2025},
+{"t":"Elite","s":7.5,"q":["Elite","Élite"],"y":2018},
+{"t":"Sex Education","s":7.9,"y":2019},
+{"t":"Euphoria","s":8.0,"y":2019},
+{"t":"His Dark Materials","s":8.0,"y":2019},
+{"t":"Mayans M.C.","s":7.6,"q":["Mayans M.C.","Mayans MC"],"y":2018},
+{"t":"Sneaky Pete","s":8.0},
+{"t":"The Bear","s":8.7,"y":2022},
+{"t":"Cobra Kai","s":8.0,"y":2018},
+{"t":"Snowpiercer","s":7.6,"y":2020},
+{"t":"Happy!","s":7.9,"y":2017},
+{"t":"Silo","s":7.5,"y":2023},
+{"t":"Reacher","s":8.5,"y":2022},
+{"t":"Hanna","s":7.0,"y":2019},
+{"t":"A Besúgó","s":8.5,"q":["A besúgó","A besugo","The Informant"],"y":2022},
+{"t":"The Queen's Gambit","s":8.4,"y":2020},
+{"t":"Dark Matter","s":8.5,"y":2024},
+{"t":"Last Samurai Standing","s":8.0,"q":["Last Samurai Standing","Ikusagami"],"y":2025},
+{"t":"Atypical","s":8.1,"y":2017},
+{"t":"You","s":7.4,"y":2018},
+{"t":"The Gentlemen","s":8.0,"y":2024},
+{"t":"Luther","s":9.0,"y":2010},
+{"t":"The Last of Us","s":7.9,"y":2023},
+{"t":"3 Body Problem","s":7.8,"y":2024},
+{"t":"Kaiju No. 8","s":7.8,"q":["Kaiju No. 8","Kaiju No 8"],"y":2024},
+{"t":"Yellowjackets","s":7.5,"y":2021},
+{"t":"Arcane","s":8.0,"y":2021},
+{"t":"Final Space","s":8.5,"y":2018},
+{"t":"Solar Opposites","s":7.0,"y":2020},
+{"t":"How to Sell Drugs Online (Fast)","s":7.4,"q":["How to Sell Drugs Online (Fast)","How to Sell Drugs Online"],"y":2019},
+{"t":"Ragnarök","s":6.9,"q":["Ragnarok","Ragnarök"],"y":2020},
+{"t":"Vikings: Valhalla","s":7.0,"y":2022},
+{"t":"Tom Clancy's Jack Ryan","s":7.8,"q":["Tom Clancy's Jack Ryan","Jack Ryan"],"y":2018},
+{"t":"Mushoku Tensei","s":7.0,"q":["Mushoku Tensei: Jobless Reincarnation","Mushoku Tensei"],"y":2021},
+{"t":"Black Mirror","s":8.0,"y":2011},
+{"t":"StartUp","s":8.2,"y":2016},
+{"t":"Barry","s":9.0,"y":2018},
+{"t":"Chainsaw Man","s":8.4,"y":2022},
+{"t":"Impulse","s":8.0,"y":2018},
+{"t":"Designated Survivor","s":7.0,"y":2016},
+{"t":"The Umbrella Academy","s":6.9,"y":2019},
+{"t":"Tulsa King","s":7.0,"y":2022},
+{"t":"Castle Rock","s":7.9,"y":2018},
+{"t":"Lost in Space","s":7.8,"y":2018},
+{"t":"Raised by Wolves","s":7.9,"y":2020},
+{"t":"The End of the F***ing World","s":8.0,"q":["The End of the F***ing World","The End of the Fucking World"],"y":2017},
+{"t":"Squid Game","s":6.9,"y":2021},
+{"t":"The Defenders","s":6.9,"q":["The Defenders","Marvel's The Defenders"],"y":2017},
+{"t":"Hawkeye","s":7.0,"y":2021},
+{"t":"The Haunting of Hill House / Bly Manor","s":7.0,"q":["The Haunting of Hill House"],"y":2018},
+{"t":"Counterpart","s":8.0,"y":2017},
+{"t":"Altered Carbon","s":7.5,"y":2018},
+{"t":"Disenchantment","s":8.0,"y":2018},
+{"t":"The Terminal List","s":7.0,"y":2022},
+{"t":"Iron Fist","s":6.8,"q":["Iron Fist","Marvel's Iron Fist"],"y":2017},
+{"t":"Moon Knight","s":6.9,"y":2022},
+{"t":"Lovecraft Country","s":6.9,"y":2020},
+{"t":"Barbaren","s":6.0,"q":["Barbaren","Barbarians"],"y":2020},
+{"t":"Biohackers","s":6.9,"y":2020},
+{"t":"Lupin","s":6.9,"y":2021},
+{"t":"Mindhunter","s":8.0,"y":2017},
+{"t":"Hannibal","s":9.3,"y":2013},
+{"t":"Misfits","s":8.0,"y":2009},
+{"t":"Chernobyl","s":9.6,"y":2019},
+{"t":"Inside Job","s":7.0,"y":2021},
+{"t":"Loki","s":7.0,"y":2021},
+{"t":"The Falcon and the Winter Soldier","s":6.9,"y":2021},
+{"t":"The White Lotus","s":6.8,"y":2021},
+{"t":"Big Mouth","s":7.0,"y":2017},
+{"t":"Bodyguard","s":8.0,"y":2018},
+{"t":"Lethal Weapon","s":7.0,"y":2016},
+{"t":"Curon","s":6.9,"y":2020},
+{"t":"Taboo","s":7.5,"y":2017},
+{"t":"Foundation","s":8.0,"y":2021},
+{"t":"Shadow and Bone","s":6.0,"y":2021},
+{"t":"Midnight Mass","s":7.0,"y":2021},
+{"t":"The Billion Dollar Code","s":7.0,"y":2021},
+{"t":"Tribes of Europa","s":5.9,"y":2021},
+{"t":"WandaVision","s":7.0,"y":2021},
+{"t":"Wu Assassins","s":5.9,"y":2019},
+{"t":"Travelers","s":7.5,"y":2016},
+{"t":"I Am Not Okay with This","s":6.0,"y":2020},
+{"t":"Love, Death & Robots","s":7.8,"q":["Love, Death & Robots","Love Death + Robots"],"y":2019},
+{"t":"Condor","s":6.0,"y":2018},
+{"t":"Shadow","s":5.0,"y":2019},
+{"t":"American Gods","s":7.0,"y":2017},
+{"t":"The Terror","s":6.8,"y":2018},
+{"t":"Warrior Nun","s":5.9,"y":2020},
+{"t":"The Mandalorian","s":7.0,"y":2019},
+{"t":"The Outsider","s":6.9,"y":2020},
+{"t":"The Witcher","s":6.0,"y":2019},
+{"t":"Into the Night","s":5.0,"y":2020},
+{"t":"Gangs of London","s":7.0,"y":2020},
+{"t":"The Alienist","s":6.0,"y":2018},
+{"t":"The Rain","s":6.9,"y":2018},
+{"t":"The Midnight Gospel","s":8.0,"y":2020},
+{"t":"Who Killed Sara?","s":4.6,"q":["Who Killed Sara?","Who Killed Sara"],"y":2021},
+{"t":"Deadly Class","s":4.9,"y":2019},
+{"t":"The Mess You Leave Behind","s":5.0,"q":["The Mess You Leave Behind","El desorden que dejas"],"y":2020},
+{"t":"Patrick Melrose","s":7.0,"y":2018},
+{"t":"Messiah","s":5.9,"y":2020},
+{"t":"Russian Doll","s":6.0,"y":2019},
+{"t":"Daybreak","s":4.0,"y":2019},
+{"t":"The Society","s":5.0,"y":2019},
+{"t":"What If…?","s":6.0,"q":["What If...?","What If"],"y":2021},
+{"t":"The Mist","s":7.0,"y":2017},
+{"t":"Cloak & Dagger","s":5.0,"q":["Cloak & Dagger","Marvel's Cloak & Dagger"],"y":2018},
+{"t":"She-Hulk","s":3.9,"q":["She-Hulk: Attorney at Law","She-Hulk"],"y":2022},
+{"t":"The Irregulars","s":1.0,"y":2021}];
+
+(function(){
+'use strict';
+const BANDS = [[11,25],[26,50],[51,100],[101,150],[151,175]];
+const GENRE_HU = {Drama:'Dráma',Crime:'Krimi',Thriller:'Thriller',Action:'Akció',Adventure:'Kaland','Science-Fiction':'Sci-fi',Fantasy:'Fantasy',Comedy:'Vígjáték',Horror:'Horror',Mystery:'Rejtély',Anime:'Anime',Supernatural:'Természetfeletti',Romance:'Romantikus',History:'Történelmi',War:'Háborús',Western:'Western',Family:'Családi',Music:'Zenés',Medical:'Orvosi',Legal:'Jogi',Espionage:'Kém',Sports:'Sport',Children:'Gyerek',Food:'Gasztro',Travel:'Utazás',Nature:'Természet',Adult:'Felnőtt'};
+const API = 'https://api.tvmaze.com/search/shows?q=';
+const CACHE_KEY = 'sorozat-rangsor:tvmaze:v1';
+const PREF_KEY = 'sorozat-rangsor:nezet';
+const GAP = 520;            // TVmaze: max. 20 hívás / 10 mp
+const MISS_TTL = 3*864e5;   // nem talált címeket 3 nap múlva újrapróbálja
+
+const shows = DATA.map((d,i)=>Object.assign({i:i, rank:i+1}, d));
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+const fmt = n => n === 10 ? '10' : n.toFixed(1);
+const tier = n => n >= 9.5 ? 'a' : n >= 9 ? 'b' : n >= 8 ? 'c' : n >= 7 ? 'd' : 'e';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function hue(t){ let h = 0; for (const c of t) h = (h*31 + c.codePointAt(0)) >>> 0; return h % 360; }
+
+/* ---------- gyorsítótár ---------- */
+let cache = {};
+try { cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}') || {}; } catch (e) { cache = {}; }
+let saveTimer = 0;
+function saveCache(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch (e) {} }, 1200);
+}
+const info = s => { const c = cache[s.t]; return c && c.id ? c : null; };
+const settled = s => !!s.img || !!info(s) || (cache[s.t] && cache[s.t].x && Date.now() - cache[s.t].x < MISS_TTL);
+function meta(s){
+  const c = info(s);
+  return [(c && c.y) || s.y, c && c.net].filter(Boolean).join(' · ');
+}
+
+/* ---------- HTML darabok ---------- */
+function posterHTML(s, size, extra){
+  return '<span class="poster" data-size="' + size + '" style="--hue:' + hue(s.t) + '">' +
+    '<span class="cover" aria-hidden="true"><span>' + esc(s.t) + '</span></span>' +
+    '<img alt="' + esc(s.t) + ' poszter"' + (size === 'm' ? ' loading="lazy"' : '') + ' decoding="async">' +
+    (extra || '') + '</span>';
+}
+const scoreHTML = s => '<span class="score" data-t="' + tier(s.s) + '">' + fmt(s.s) + '</span>';
+const label = s => s.rank + '. hely: ' + s.t + ', ' + fmt(s.s) + ' pont';
+
+function podiumHTML(){
+  return shows.slice(0,3).map((s,k) =>
+    '<button type="button" class="pod pod-' + (k+1) + '" data-i="' + s.i + '" aria-label="' + esc(label(s)) + '">' +
+      '<span class="stand">' + posterHTML(s, 'o') +
+        '<span class="plinth"><span class="pod-num">' + s.rank + '</span></span></span>' +
+      '<span class="cap"><span class="title">' + esc(s.t) + '</span><span class="meta" data-meta>' + esc(meta(s)) + '</span>' + scoreHTML(s) + '</span>' +
+    '</button>').join('');
+}
+function railHTML(){
+  return shows.slice(3,10).map(s =>
+    '<li><button type="button" class="rail-item" data-i="' + s.i + '" aria-label="' + esc(label(s)) + '">' +
+      '<span class="big-num" aria-hidden="true">' + s.rank + '</span>' +
+      posterHTML(s, 'o') +
+      '<span class="rail-cap"><span><span class="title">' + esc(s.t) + '</span><span class="meta" data-meta>' + esc(meta(s)) + '</span></span>' + scoreHTML(s) + '</span>' +
+    '</button></li>').join('');
+}
+function railTileHTML(){
+  const top = shows.slice(0,10), all = shows.reduce((a,s) => a + s.s, 0) / shows.length;
+  const tens = top.filter(s => s.s === 10).length;
+  return '<li><div class="rail-tile"><b>' + avgOf(top) + '</b><span><strong>a top 10 átlaga</strong><br>A teljes listáé ' + all.toFixed(1) + '. Tízes a top 10-ben: ' + tens + '.</span></div></li>';
+}
+function cardHTML(s){
+  return '<li><button type="button" class="card" data-i="' + s.i + '" aria-label="' + esc(label(s)) + '">' +
+    '<span class="row-rank" aria-hidden="true">' + s.rank + '</span>' +
+    posterHTML(s, 'm', '<span class="chip" aria-hidden="true">' + s.rank + '</span>') +
+    '<span class="card-body"><span class="title">' + esc(s.t) + '' + '</span><span class="meta" data-meta>' + esc(meta(s)) + '</span></span>' +
+    '<span class="score-wrap" data-t="' + tier(s.s) + '"><span class="bar" aria-hidden="true"><i style="width:' + (s.s*10) + '%"></i></span>' + scoreHTML(s) + '</span>' +
+  '</button></li>';
+}
+
+/* ---------- kép beállítása ---------- */
+function setPoster(posterEl, s){
+  if (!posterEl) return;
+  const c = info(s);
+  const big = posterEl.dataset.size === 'o';
+  const src = s.img || (c && (big ? (c.o || c.m) : (c.m || c.o)));
+  const img = posterEl.querySelector('img');
+  if (!src || !img || img.getAttribute('src') === src) return;
+  img.onload = () => img.classList.add('ok');
+  img.onerror = () => { img.classList.remove('ok'); img.removeAttribute('src'); };
+  img.src = src;
+  if (img.complete && img.naturalWidth) img.classList.add('ok');
+}
+function paint(el, s){
+  setPoster(el.querySelector('.poster'), s);
+  el.querySelectorAll('[data-meta]').forEach(m => { m.textContent = meta(s); });
+}
+function paintAll(s){
+  document.querySelectorAll('[data-i="' + s.i + '"]').forEach(el => paint(el, s));
+  if (s.i === 0) heroBackdrop();
+  if (sheet.open && cur === s.i) fillSheet(s);
+}
+function heroBackdrop(){
+  const s = shows[0], c = info(s), src = s.img || (c && (c.o || c.m));
+  if (!src) return;
+  const im = new Image();
+  im.onload = () => { const bg = $('heroBg'); bg.style.backgroundImage = 'url("' + src.replace(/"/g,'%22') + '")'; bg.classList.add('ok'); };
+  im.src = src;
+}
+
+/* ---------- TVmaze lekérés, sorban, a limitet tartva ---------- */
+let nextSlot = 0, offline = false, netFails = 0, active = 0;
+const queue = [], queued = new Set(), failed = new Set();
+async function slot(){
+  const now = Date.now(), wait = Math.max(0, nextSlot - now);
+  nextSlot = Math.max(now, nextSlot) + GAP;
+  if (wait) await sleep(wait);
+}
+async function getJSON(url){
+  for (let attempt = 0; attempt < 4; attempt++){
+    await slot();
+    let r;
+    try { r = await fetch(url); }
+    catch (e) {
+      if (++netFails >= 3){ offline = true; queue.length = 0; updateStatus(); }
+      throw e;
+    }
+    netFails = 0;
+    if (r.status === 429){ await sleep(2500 * (attempt + 1)); continue; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+  throw new Error('rate limit');
+}
+const yearOf = sh => sh && sh.premiered ? +sh.premiered.slice(0,4) : null;
+function pick(results, s){
+  const names = (s.q || []).concat(s.t).map(norm);
+  const related = sh => { const n = norm(sh.name || ''); return names.some(x => n === x || n.includes(x) || x.includes(n)); };
+  const list = (results || []).map(r => r.show).filter(sh => sh && sh.id && related(sh));
+  if (!list.length) return null;
+  if (s.y){
+    return list.find(sh => yearOf(sh) === s.y)
+        || list.find(sh => yearOf(sh) && Math.abs(yearOf(sh) - s.y) === 1)
+        || null;
+  }
+  return list.find(sh => sh.image) || list[0];
+}
+function plain(html){
+  if (!html) return '';
+  const txt = (new DOMParser().parseFromString(html, 'text/html').body.textContent || '').replace(/\s+/g,' ').trim();
+  if (txt.length <= 700) return txt;
+  return txt.slice(0, 700).replace(/\s+\S*$/, '') + '…';
+}
+async function resolve(s){
+  const all = [];
+  let found = null;
+  for (const q of (s.q || [s.t])){
+    const res = await getJSON(API + encodeURIComponent(q));
+    all.push.apply(all, res || []);
+    found = pick(res, s);
+    if (found) break;
+  }
+  if (!found){
+    const names = (s.q || []).concat(s.t).map(norm);
+    const exact = all.map(r => r.show).find(sh => sh && sh.image && names.includes(norm(sh.name || '')));
+    found = exact || null;
+  }
+  if (found){
+    cache[s.t] = {
+      id: found.id, n: found.name, y: yearOf(found),
+      net: (found.network && found.network.name) || (found.webChannel && found.webChannel.name) || '',
+      g: found.genres || [], m: found.image && found.image.medium, o: found.image && found.image.original,
+      u: found.url, s: plain(found.summary)
+    };
+  } else {
+    cache[s.t] = { x: Date.now() };
+  }
+  saveCache();
+}
+function want(s, urgent){
+  if (offline || settled(s) || failed.has(s.i)) return;
+  if (queued.has(s.i)){
+    if (urgent){ const k = queue.indexOf(s); if (k > 0){ queue.splice(k,1); queue.unshift(s); } }
+    return;
+  }
+  queued.add(s.i);
+  urgent ? queue.unshift(s) : queue.push(s);
+  pump();
+}
+function pump(){
+  while (active < 3 && queue.length && !offline){
+    const s = queue.shift();
+    active++;
+    resolve(s)
+      .then(() => paintAll(s))
+      .catch(() => { failed.add(s.i); })
+      .finally(() => { active--; queued.delete(s.i); updateStatus(); pump(); });
+  }
+}
+const io = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    io.unobserve(e.target);
+    want(shows[+e.target.dataset.i], true);
+  });
+}, { rootMargin: '700px 0px' }) : null;
+function hydrate(root){
+  root.querySelectorAll('[data-i]').forEach(el => {
+    const s = shows[+el.dataset.i];
+    paint(el, s);
+    if (!settled(s) && io) io.observe(el);
+  });
+}
+function updateStatus(){
+  const done = shows.filter(s => s.img || (info(s) && info(s).m)).length;
+  const el = $('status');
+  if (offline && done < shows.length){
+    el.textContent = 'A TVmaze most nem érhető el, ezért ' + (shows.length - done) + ' poszter helyén a cím látszik. Később frissítsd az oldalt.';
+  } else if (done < shows.length && (queue.length || active)){
+    el.textContent = 'Poszterek betöltése: ' + done + ' / ' + shows.length;
+  } else {
+    el.textContent = done + ' / ' + shows.length + ' poszter';
+  }
+}
+
+/* ---------- fejléc statisztika ---------- */
+function renderStats(){
+  const avg = shows.reduce((a,s) => a + s.s, 0) / shows.length;
+  const tens = shows.filter(s => s.s === 10);
+  const late = shows.slice(100).slice().sort((a,b) => b.s - a.s || a.rank - b.rank)[0];
+  $('lead').textContent = 'Az eddig látott ' + shows.length + ' sorozatom szimpátia sorrendben. A helyezés azt mutatja, mennyire szerettem, a pontszám mellette áll.';
+  $('stats').innerHTML =
+    '<div><dt>sorozat</dt><dd>' + shows.length + '</dd></div>' +
+    '<div><dt>átlagpont</dt><dd>' + avg.toFixed(1) + '</dd></div>' +
+    '<div><dt>tízes: ' + esc(tens.map(s => s.t).join(', ')) + '</dt><dd class="gold">' + tens.length + '</dd></div>' +
+    (late ? '<div><dt>legjobb pont a 100. hely után: ' + esc(late.t) + ' (' + late.rank + '.)</dt><dd>' + fmt(late.s) + '</dd></div>' : '');
+}
+
+/* ---------- teljes lista ---------- */
+let sortMode = 'rank', view = 'grid';
+try { if (localStorage.getItem(PREF_KEY) === 'list') view = 'list'; } catch (e) {}
+const listEl = $('list'), qEl = $('q');
+function avgOf(arr){ return (arr.reduce((a,s) => a + s.s, 0) / arr.length).toFixed(1); }
+function renderList(){
+  const q = norm(qEl.value);
+  const flat = !!q || sortMode === 'score';
+  let items = flat ? shows.slice() : shows.slice(10);
+  if (q) items = items.filter(s => norm(s.t).includes(q) || (info(s) && norm(info(s).n).includes(q)));
+  if (sortMode === 'score') items.sort((a,b) => b.s - a.s || a.rank - b.rank);
+  listEl.classList.toggle('is-list', view === 'list');
+  $('listSub').textContent = q ? 'Keresés a teljes listában' : sortMode === 'score' ? 'Mind a ' + shows.length + ', pontszám szerint' : '11–' + shows.length + '. hely';
+  $('count').textContent = q ? items.length + ' találat' : items.length + ' sorozat';
+  if (!items.length){
+    listEl.innerHTML = '<p class="empty">Nincs ilyen című sorozat a listán.</p>';
+    return;
+  }
+  if (flat){
+    listEl.innerHTML = '<ol class="grid">' + items.map(cardHTML).join('') + '</ol>';
+  } else {
+    listEl.innerHTML = BANDS.filter(b => b[0] <= shows.length).map(b => {
+      const part = shows.slice(b[0]-1, Math.min(b[1], shows.length));
+      return '<section class="band-block"><div class="band-head"><h3>' + b[0] + '–' + Math.min(b[1], shows.length) + '. hely</h3><span class="avg">átlag ' + avgOf(part) + '</span></div>' +
+        '<ol class="grid" start="' + b[0] + '">' + part.map(cardHTML).join('') + '</ol></section>';
+    }).join('');
+  }
+  hydrate(listEl);
+}
+function press(on, off){ $(on).setAttribute('aria-pressed','true'); $(off).setAttribute('aria-pressed','false'); }
+$('sortRank').onclick = () => { sortMode = 'rank'; press('sortRank','sortScore'); renderList(); };
+$('sortScore').onclick = () => { sortMode = 'score'; press('sortScore','sortRank'); renderList(); };
+$('viewGrid').onclick = () => { view = 'grid'; press('viewGrid','viewList'); try { localStorage.setItem(PREF_KEY,'grid'); } catch (e) {} renderList(); };
+$('viewList').onclick = () => { view = 'list'; press('viewList','viewGrid'); try { localStorage.setItem(PREF_KEY,'list'); } catch (e) {} renderList(); };
+let qt = 0;
+qEl.addEventListener('input', () => { clearTimeout(qt); qt = setTimeout(renderList, 120); });
+
+/* ---------- adatlap ---------- */
+const sheet = $('sheet');
+let cur = -1;
+function fillSheet(s){
+  const c = info(s);
+  $('shPoster').innerHTML = posterHTML(s, 'o');
+  setPoster($('shPoster').querySelector('.poster'), s);
+  $('shRank').textContent = s.rank + '. hely';
+  $('shTitle').textContent = s.t;
+  const alt = c && c.n && norm(c.n) !== norm(s.t) ? 'A TVmaze-en: ' + c.n : '';
+  $('shAlt').textContent = alt; $('shAlt').hidden = !alt;
+  const facts = [['Pontszám', '<span class="score" data-t="' + tier(s.s) + '" style="font-size:inherit">' + fmt(s.s) + '</span> / 10'], ['Bemutató', esc((c && c.y) || s.y || '–')], ['Csatorna', esc((c && c.net) || '–')]];
+  $('shFacts').innerHTML = facts.map(f => '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>').join('');
+  const g = c && c.g && c.g.length ? c.g.map(x => '<span>' + esc(GENRE_HU[x] || x) + '</span>').join('') : '';
+  $('shGenres').innerHTML = g; $('shGenres').hidden = !g;
+  let sum;
+  if (c && c.s) sum = '<small>Leírás (TVmaze, angolul)</small>' + esc(c.s);
+  else if (c) sum = '';
+  else if (offline) sum = 'A TVmaze most nem érhető el, ezért nincs leírás.';
+  else if (cache[s.t] && cache[s.t].x) sum = 'Ehhez a sorozathoz nem találtam adatlapot a TVmaze-en.';
+  else sum = 'Adatok betöltése…';
+  $('shSummary').innerHTML = sum;
+  const link = $('shLink');
+  link.href = c && c.u ? c.u : 'https://www.tvmaze.com/search?q=' + encodeURIComponent((s.q && s.q[0]) || s.t);
+  link.textContent = c && c.u ? 'Adatlap a TVmaze-en ↗' : 'Keresés a TVmaze-en ↗';
+  $('shPrev').disabled = s.i === 0;
+  $('shNext').disabled = s.i === shows.length - 1;
+}
+function openSheet(i){
+  cur = i;
+  const s = shows[i];
+  fillSheet(s);
+  if (!sheet.open){ if (sheet.showModal) sheet.showModal(); else sheet.setAttribute('open',''); }
+  sheet.querySelector('.sheet').scrollTop = 0;
+  want(s, true);
+}
+$('shClose').onclick = () => sheet.close();
+$('shPrev').onclick = () => { if (cur > 0) openSheet(cur - 1); };
+$('shNext').onclick = () => { if (cur < shows.length - 1) openSheet(cur + 1); };
+sheet.addEventListener('click', e => { if (e.target === sheet) sheet.close(); });
+sheet.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft' && cur > 0) openSheet(cur - 1);
+  if (e.key === 'ArrowRight' && cur < shows.length - 1) openSheet(cur + 1);
+});
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-i]');
+  if (b && !sheet.contains(b)) openSheet(+b.dataset.i);
+});
+
+/* ---------- indítás ---------- */
+if (view === 'list') press('viewList','viewGrid');
+renderStats();
+$('podium').innerHTML = podiumHTML();
+$('rail').innerHTML = railHTML() + railTileHTML();
+hydrate($('podium')); hydrate($('rail'));
+heroBackdrop();
+renderList();
+shows.slice(0,10).forEach(s => want(s, false));
+shows.slice(10).forEach(s => want(s, false));
+updateStatus();
+})();
+</script>
+</body>
+</html>
