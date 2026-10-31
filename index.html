@@ -46,7 +46,7 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;te
 .title{display:block;font:800 1.05rem/1.05 var(--display);text-transform:uppercase;letter-spacing:.01em;text-wrap:balance;overflow-wrap:anywhere}
 .meta{display:block;margin-top:3px;font-size:.78rem;line-height:1.3;color:var(--muted);min-height:1.3em}
 .score{font:800 1.3rem/1 var(--display);font-variant-numeric:tabular-nums;color:var(--sc,var(--paper));letter-spacing:.01em}
-[data-t="a"]{--sc:var(--s-a)}[data-t="b"]{--sc:var(--s-b)}[data-t="c"]{--sc:var(--s-c)}[data-t="d"]{--sc:var(--s-d)}[data-t="e"]{--sc:var(--s-e)}
+[data-t="a"]{--sc:var(--s-a)}[data-t="b"]{--sc:var(--s-b)}[data-t="c"]{--sc:var(--s-c)}[data-t="d"]{--sc:var(--s-d)}[data-t="e"]{--sc:var(--s-e)}[data-t="n"]{--sc:var(--muted)}
 
 /* ---------- poszter ---------- */
 .poster{position:relative;display:block;aspect-ratio:2/3;max-width:100%;border-radius:8px;overflow:hidden;background:var(--ink-3);container-type:inline-size;transition:transform .25s ease,box-shadow .25s ease}
@@ -369,6 +369,7 @@ const DATA = [{"t":"Sons of Anarchy","s":9.7,"y":2008},
 {"t":"Mushoku Tensei","s":7.0,"q":["Mushoku Tensei: Jobless Reincarnation","Mushoku Tensei"],"y":2021},
 {"t":"Elite","s":7.5,"q":["Elite","Élite"],"y":2018},
 {"t":"Sex Education","s":7.9,"y":2019},
+{"t":"Landman","y":2024},
 {"t":"Euphoria","s":8.0,"y":2019},
 {"t":"His Dark Materials","s":8.0,"y":2019},
 {"t":"Mayans M.C.","s":7.6,"q":["Mayans M.C.","Mayans MC"],"y":2018},
@@ -477,7 +478,7 @@ const DATA = [{"t":"Sons of Anarchy","s":9.7,"y":2008},
 
 (function(){
 'use strict';
-const BANDS = [[11,25],[26,50],[51,100],[101,150],[151,175]];
+const BANDS = [[11,25],[26,50],[51,100],[101,150],[151,Infinity]];
 const GENRE_HU = {Drama:'Dráma',Crime:'Krimi',Thriller:'Thriller',Action:'Akció',Adventure:'Kaland','Science-Fiction':'Sci-fi',Fantasy:'Fantasy',Comedy:'Vígjáték',Horror:'Horror',Mystery:'Rejtély',Anime:'Anime',Supernatural:'Természetfeletti',Romance:'Romantikus',History:'Történelmi',War:'Háborús',Western:'Western',Family:'Családi',Music:'Zenés',Medical:'Orvosi',Legal:'Jogi',Espionage:'Kém',Sports:'Sport',Children:'Gyerek',Food:'Gasztro',Travel:'Utazás',Nature:'Természet',Adult:'Felnőtt'};
 const API = 'https://api.tvmaze.com/search/shows?q=';
 const CACHE_KEY = 'sorozat-rangsor:tvmaze:v2';
@@ -489,8 +490,10 @@ const shows = DATA.map((d,i)=>Object.assign({i:i, rank:i+1}, d));
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
-const fmt = n => n === 10 ? '10' : n.toFixed(1);
-const tier = n => n >= 9.5 ? 'a' : n >= 9 ? 'b' : n >= 8 ? 'c' : n >= 7 ? 'd' : 'e';
+const fmt = n => n == null ? '–' : n === 10 ? '10' : n.toFixed(1);
+const rated = arr => arr.filter(s => typeof s.s === 'number');
+const byScore = (a,b) => (b.s ?? -1) - (a.s ?? -1) || a.rank - b.rank;
+const tier = n => n == null ? 'n' : n >= 9.5 ? 'a' : n >= 9 ? 'b' : n >= 8 ? 'c' : n >= 7 ? 'd' : 'e';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function hue(t){ let h = 0; for (const c of t) h = (h*31 + c.codePointAt(0)) >>> 0; return h % 360; }
 
@@ -518,7 +521,7 @@ function posterHTML(s, size, extra){
     (extra || '') + '</span>';
 }
 const scoreHTML = s => '<span class="score" data-t="' + tier(s.s) + '">' + fmt(s.s) + '</span>';
-const label = s => s.rank + '. hely: ' + s.t + ', ' + fmt(s.s) + ' pont';
+const label = s => s.rank + '. hely: ' + s.t + ', ' + (s.s == null ? 'még nincs pontszám' : fmt(s.s) + ' pont');
 
 function podiumHTML(){
   return shows.slice(0,3).map((s,k) =>
@@ -537,7 +540,7 @@ function railHTML(){
     '</button></li>').join('');
 }
 function railTileHTML(){
-  const top = shows.slice(0,10), all = shows.reduce((a,s) => a + s.s, 0) / shows.length;
+  const top = shows.slice(0,10), all = +avgOf(shows);
   const tens = top.filter(s => s.s === 10).length;
   return '<li><div class="rail-tile"><b>' + avgOf(top) + '</b><span><strong>a top 10 átlaga</strong><br>A teljes listáé ' + all.toFixed(1) + '. Tízes a top 10-ben: ' + tens + '.</span></div></li>';
 }
@@ -546,7 +549,7 @@ function cardHTML(s){
     '<span class="row-rank" aria-hidden="true">' + s.rank + '</span>' +
     posterHTML(s, 'm', '<span class="chip" aria-hidden="true">' + s.rank + '</span>') +
     '<span class="card-body"><span class="title">' + esc(s.t) + '' + '</span><span class="meta" data-meta>' + esc(meta(s)) + '</span></span>' +
-    '<span class="score-wrap" data-t="' + tier(s.s) + '"><span class="bar" aria-hidden="true"><i style="width:' + (s.s*10) + '%"></i></span>' + scoreHTML(s) + '</span>' +
+    '<span class="score-wrap" data-t="' + tier(s.s) + '"><span class="bar" aria-hidden="true"><i style="width:' + ((s.s || 0)*10) + '%"></i></span>' + scoreHTML(s) + '</span>' +
   '</button></li>';
 }
 
@@ -706,9 +709,9 @@ function updateStatus(){
 
 /* ---------- fejléc statisztika ---------- */
 function renderStats(){
-  const avg = shows.reduce((a,s) => a + s.s, 0) / shows.length;
+  const avg = +avgOf(shows);
   const tens = shows.filter(s => s.s === 10);
-  const late = shows.slice(100).slice().sort((a,b) => b.s - a.s || a.rank - b.rank)[0];
+  const late = rated(shows.slice(100)).sort(byScore)[0];
   $('lead').textContent = 'Az eddig látott ' + shows.length + ' sorozatom szimpátia sorrendben. A helyezés azt mutatja, mennyire szerettem, a pontszám mellette áll.';
   $('stats').innerHTML =
     '<div><dt>sorozat</dt><dd>' + shows.length + '</dd></div>' +
@@ -721,13 +724,13 @@ function renderStats(){
 let sortMode = 'rank', view = 'grid';
 try { if (localStorage.getItem(PREF_KEY) === 'list') view = 'list'; } catch (e) {}
 const listEl = $('list'), qEl = $('q');
-function avgOf(arr){ return (arr.reduce((a,s) => a + s.s, 0) / arr.length).toFixed(1); }
+function avgOf(arr){ const r = rated(arr); return r.length ? (r.reduce((a,s) => a + s.s, 0) / r.length).toFixed(1) : '–'; }
 function renderList(){
   const q = norm(qEl.value);
   const flat = !!q || sortMode === 'score';
   let items = flat ? shows.slice() : shows.slice(10);
   if (q) items = items.filter(s => norm(s.t).includes(q) || (info(s) && norm(info(s).n).includes(q)));
-  if (sortMode === 'score') items.sort((a,b) => b.s - a.s || a.rank - b.rank);
+  if (sortMode === 'score') items.sort(byScore);
   listEl.classList.toggle('is-list', view === 'list');
   $('listSub').textContent = q ? 'Keresés a teljes listában' : sortMode === 'score' ? 'Mind a ' + shows.length + ', pontszám szerint' : '11–' + shows.length + '. hely';
   $('count').textContent = q ? items.length + ' találat' : items.length + ' sorozat';
@@ -765,7 +768,7 @@ function fillSheet(s){
   $('shTitle').textContent = s.t;
   const alt = [c && c.n && norm(c.n) !== norm(s.t) ? 'A TVmaze-en: ' + c.n : '', c && c.sn ? 'Plakát: ' + c.sn + '. évad' : ''].filter(Boolean).join(' · ');
   $('shAlt').textContent = alt; $('shAlt').hidden = !alt;
-  const facts = [['Pontszám', '<span class="score" data-t="' + tier(s.s) + '" style="font-size:inherit">' + fmt(s.s) + '</span> / 10'], ['Bemutató', esc((c && c.y) || s.y || '–')], ['Csatorna', esc((c && c.net) || '–')]];
+  const facts = [['Pontszám', '<span class="score" data-t="' + tier(s.s) + '" style="font-size:inherit">' + fmt(s.s) + '</span>' + (s.s == null ? '' : ' / 10')], ['Bemutató', esc((c && c.y) || s.y || '–')], ['Csatorna', esc((c && c.net) || '–')]];
   $('shFacts').innerHTML = facts.map(f => '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>').join('');
   const g = c && c.g && c.g.length ? c.g.map(x => '<span>' + esc(GENRE_HU[x] || x) + '</span>').join('') : '';
   $('shGenres').innerHTML = g; $('shGenres').hidden = !g;
